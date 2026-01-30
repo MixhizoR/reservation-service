@@ -1,4 +1,4 @@
-package com.omniticket.exception;
+package com.omniticket.reservation_service.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

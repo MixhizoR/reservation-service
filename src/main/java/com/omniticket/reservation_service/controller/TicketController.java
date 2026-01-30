@@ -6,7 +6,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.omniticket.reservation_service.model.Ticket;
+import com.omniticket.reservation_service.model.TicketStatus;
 import com.omniticket.reservation_service.service.TicketService;
+import java.time.LocalDateTime;
 
 import lombok.RequiredArgsConstructor;
 
@@ -41,6 +43,22 @@ public class TicketController {
     public ResponseEntity<Void> deleteTicket(@PathVariable Long id) {
         ticketService.deleteTicket(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/reserve")
+    public ResponseEntity<Ticket> reserveTicket(@PathVariable Long id) {
+        return ResponseEntity.ok(ticketService.reserveTicket(id));
+    }
+
+    // TEST İÇİN: Süresi dolmuş bir rezervasyon oluşturur
+    @PostMapping("/test/create-expired")
+    public ResponseEntity<Ticket> createExpiredTicket() {
+        Ticket ticket = new Ticket();
+        ticket.setSeatNumber("T101");
+        ticket.setPrice(100.0);
+        ticket.setStatus(TicketStatus.RESERVED);
+        ticket.setReservedAt(LocalDateTime.now().minusMinutes(2)); // 2 dakika önce rezerve edilmiş
+        return ResponseEntity.ok(ticketService.createTicket(ticket));
     }
 
 }
