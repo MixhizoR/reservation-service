@@ -2,8 +2,13 @@ package com.omniticket.reservation_service.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j; // Loglama için eklendi
 
@@ -19,6 +24,8 @@ import com.omniticket.reservation_service.exception.ResourceNotFoundException;
 public class TicketService {
 
     private final TicketRepository ticketRepository;
+    private final RedissonClient redissonClient;
+    private final TransactionTemplate transactionTemplate;
 
     public Ticket createTicket(Ticket ticket) {
         log.info("Yeni bilet oluşturuluyor: {}", ticket.getSeatNumber());
@@ -55,19 +62,59 @@ public class TicketService {
         log.warn("Bilet silindi: {}", id);
     }
 
-    @Transactional
     public Ticket reserveTicket(Long id) {
-        Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Bilet bulunamadı! ID: " + id));
+        RLock lock = redissonClient.getLock("ticket-lock:" + id);
 
-        if (ticket.getStatus() != TicketStatus.AVAILABLE) {
-            throw new ResourceNotFoundException("Bu bilet zaten rezerve edilmiş veya satılmış! ❌");
+        try {
+            // 5 sn kilidi bekler, 10 sn sonra kilidi otomatik salar (Deadlock koruması)
+            if (!lock.tryLock(5, 10, TimeUnit.SECONDS)) {
+                throw new RuntimeException("Şu an çok yoğun, lütfen tekrar deneyin!");
+            }
+
+            try {
+                log.info("Kilit alındı, işlem başlıyor... 🔐");
+
+                // Transaction burada başlıyor! (Lock içindeyiz ama transaction üstte değil)
+                return transactionTemplate.execute(status -> {
+                    Ticket ticket = ticketRepository.findById(id)
+                            .orElseThrow(() -> new RuntimeException("Bilet bulunamadı!"));
+
+                    if (ticket.getStatus() != TicketStatus.AVAILABLE) {
+                        throw new RuntimeException("Bilet zaten dolu! ❌");
+                    }
+
+                    ticket.setStatus(TicketStatus.RESERVED);
+                    ticket.setReservedAt(LocalDateTime.now());
+
+                    return ticketRepository.save(ticket);
+                });
+                // Transaction burada biter (Commit) ✅
+
+            } finally {
+                if (lock.isLocked() && lock.isHeldByCurrentThread()) {
+                    lock.unlock(); // Transaction bittikten sonra KİLİDİ AÇ 🔓
+                    log.info("İşlem bitti, kilit açıldı.");
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Sistemsel bir hata oluştu.");
+        }
+    }
+
+    @Transactional
+    public Ticket purchaseTicket(Long id) {
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Bilet bulunamadı! ID: " + id));
+
+        if (ticket.getStatus() != TicketStatus.RESERVED) {
+            throw new RuntimeException("Satın almak için önce rezervasyon yapmalısınız! ❌");
         }
 
-        ticket.setStatus(TicketStatus.RESERVED);
-        ticket.setReservedAt(LocalDateTime.now());
+        ticket.setStatus(TicketStatus.SOLD);
+        ticket.setReservedAt(null);
 
-        log.info("Bilet rezerve edildi: {}", id);
+        log.info("Bilet başarıyla satıldı: {}", id);
         return ticketRepository.save(ticket);
     }
 }

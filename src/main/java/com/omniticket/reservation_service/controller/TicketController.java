@@ -50,6 +50,11 @@ public class TicketController {
         return ResponseEntity.ok(ticketService.reserveTicket(id));
     }
 
+    @PostMapping("/{id}/purchase")
+    public ResponseEntity<Ticket> purchase(@PathVariable Long id) {
+        return ResponseEntity.ok(ticketService.purchaseTicket(id));
+    }
+
     // TEST İÇİN: Süresi dolmuş bir rezervasyon oluşturur
     @PostMapping("/test/create-expired")
     public ResponseEntity<Ticket> createExpiredTicket() {

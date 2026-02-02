@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: 'postgres:16' # 'latest' yerine versiyon belirtmek Best Practice'dir
+    image: 'postgres:16-alpine' # 'latest' yerine versiyon belirtmek Best Practice'dir
     container_name: omniticket_db
     environment:
       - 'POSTGRES_DB=${POSTGRES_DB}'
@@ -12,7 +12,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   redis:
-    image: 'redis:latest'
+    image: 'redis:7.4-alpine'
     container_name: omniticket_redis
     ports:
       - '6379:6379' # Redis portunu dışarı açtık

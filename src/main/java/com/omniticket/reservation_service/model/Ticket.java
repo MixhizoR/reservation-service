@@ -28,4 +28,7 @@ public class Ticket {
 
     @Column(nullable = true)
     private LocalDateTime reservedAt;
+
+    @Version
+    private Long version;
 }
