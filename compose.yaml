@@ -17,5 +17,15 @@ services:
     ports:
       - '6379:6379' # Redis portunu dışarı açtık
 
+  rabbitmq:
+    image: 'rabbitmq:4.1.8-management-alpine'
+    container_name: omniticket_rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    environment:
+      - 'RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}'
+      - 'RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}'
+
 volumes:
   pgdata: # Verilerin silinmemesi için disk alanı ayırdık

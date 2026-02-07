@@ -28,9 +28,8 @@ public class TicketScheduler {
 
         LocalDateTime oneMinuteAgo = LocalDateTime.now().minusMinutes(1);
 
-        List<Ticket> reservedTickets = ticketRepository.findAll().stream().filter(
-                ticket -> ticket.getStatus() == TicketStatus.RESERVED && ticket.getReservedAt().isBefore(oneMinuteAgo))
-                .toList();
+        List<Ticket> reservedTickets = ticketRepository.findAllByStatusAndReservedAtBefore(
+                TicketStatus.RESERVED, oneMinuteAgo);
 
         for (Ticket ticket : reservedTickets) {
             ticket.setStatus(TicketStatus.AVAILABLE);

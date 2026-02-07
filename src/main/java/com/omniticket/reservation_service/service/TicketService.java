@@ -9,24 +9,27 @@ import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j; // Loglama için eklendi
 
 import com.omniticket.reservation_service.model.Ticket;
 import com.omniticket.reservation_service.model.TicketStatus;
 import com.omniticket.reservation_service.repository.TicketRepository;
+import com.omniticket.reservation_service.config.RabbitMQConfig;
 import com.omniticket.reservation_service.exception.ResourceNotFoundException;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional
 public class TicketService {
 
     private final TicketRepository ticketRepository;
     private final RedissonClient redissonClient;
     private final TransactionTemplate transactionTemplate;
+    private final RabbitTemplate rabbitTemplate;
 
+    @Transactional
     public Ticket createTicket(Ticket ticket) {
         log.info("Yeni bilet oluşturuluyor: {}", ticket.getSeatNumber());
         return ticketRepository.save(ticket);
@@ -43,6 +46,7 @@ public class TicketService {
         return ticketRepository.findAllByOrderByIdAsc();
     }
 
+    @Transactional
     public Ticket updateTicket(Long id, Ticket ticketDetails) {
         // Önce veritabanındaki mevcut bileti buluyoruz
         Ticket existingTicket = getTicket(id);
@@ -56,6 +60,7 @@ public class TicketService {
         return ticketRepository.save(existingTicket);
     }
 
+    @Transactional
     public void deleteTicket(Long id) {
         Ticket ticket = getTicket(id);
         ticketRepository.delete(ticket);
@@ -108,13 +113,23 @@ public class TicketService {
                 .orElseThrow(() -> new RuntimeException("Bilet bulunamadı! ID: " + id));
 
         if (ticket.getStatus() != TicketStatus.RESERVED) {
-            throw new RuntimeException("Satın almak için önce rezervasyon yapmalısınız! ❌");
+            throw new RuntimeException("Satın almak için önce rezervasyon yapmalısınız!");
         }
 
         ticket.setStatus(TicketStatus.SOLD);
         ticket.setReservedAt(null);
 
         log.info("Bilet başarıyla satıldı: {}", id);
-        return ticketRepository.save(ticket);
+        Ticket soldTicket = ticketRepository.save(ticket);
+
+        String message = "Bilet Satıldı: ID=" + id + ", Koltuk=" + ticket.getSeatNumber();
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE_NAME,
+                RabbitMQConfig.ROUTING_KEY,
+                message);
+        log.info("RabbitMQ'ya mesaj fırlatıldı: {}", message);
+
+        return soldTicket;
+
     }
 }
